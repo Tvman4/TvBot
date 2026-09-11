@@ -78,5 +78,5 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.on('error', console.error);
-app.listen(PORT, () => console.log(`Verification API listening on :${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Verification API listening on :${PORT}`));
 client.login(TOKEN);

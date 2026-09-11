@@ -15,7 +15,7 @@ Set these as deployment secrets/environment variables:
 - `DISCORD_TOKEN` — Discord bot token
 - `DISCORD_CLIENT_ID` — Discord application ID
 - `DISCORD_GUILD_ID` — optional guild ID for fast command registration during testing
-- `PORT` — usually supplied by the host
+- `PORT` — supplied automatically by Render; do not hard-code it in Render unless you have a specific reason
 
 ## Flow
 
@@ -30,3 +30,7 @@ Set these as deployment secrets/environment variables:
 Deploy this directory as a Node/Docker web service. Copy the service's HTTPS URL into `API_BASE_URL` in the Android app before building.
 
 For GitHub Actions, store `DISCORD_TOKEN` in repository **Settings → Secrets and variables → Actions**. Never commit the token to source control.
+
+## Render troubleshooting
+
+The Dockerfile uses `npm install` rather than `npm ci`, so the service does not require a committed `package-lock.json`. The API binds to `0.0.0.0` and uses Render's `PORT` environment variable.
