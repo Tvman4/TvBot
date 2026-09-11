@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tvpatcher-verification
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: PORT
+        value: "3000"
