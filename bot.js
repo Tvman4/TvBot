@@ -31,6 +31,10 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
+// ----------------------------------------
+// Slash commands
+// ----------------------------------------
+
 const commands = [
   new SlashCommandBuilder()
     .setName("verify")
@@ -38,7 +42,7 @@ const commands = [
     .addStringOption((option) =>
       option
         .setName("otp")
-        .setDescription("The full request code shown in TvPatcher")
+        .setDescription("Paste the full request code from TvPatcher")
         .setRequired(true)
     ),
 
@@ -46,6 +50,10 @@ const commands = [
     .setName("status")
     .setDescription("Check whether the TvBot API is online"),
 ].map((command) => command.toJSON());
+
+// ----------------------------------------
+// Register Discord commands
+// ----------------------------------------
 
 async function registerCommands() {
   const rest = new REST({ version: "10" }).setToken(token);
@@ -62,8 +70,14 @@ async function registerCommands() {
   console.log("Slash commands registered.");
 }
 
+// ----------------------------------------
+// API request helper
+// ----------------------------------------
+
 async function apiRequest(path, options = {}) {
   const url = `${apiUrl.replace(/\/$/, "")}${path}`;
+
+  console.log(`API request: ${options.method || "GET"} ${url}`);
 
   const response = await fetch(url, {
     ...options,
@@ -80,13 +94,13 @@ async function apiRequest(path, options = {}) {
   try {
     data = await response.json();
   } catch {
-    const text = await response.text();
-
     data = {
       success: response.ok,
-      message: text,
+      message: await response.text(),
     };
   }
+
+  console.log(`API response: HTTP ${response.status}`);
 
   return {
     ok: response.ok,
@@ -94,6 +108,10 @@ async function apiRequest(path, options = {}) {
     data,
   };
 }
+
+// ----------------------------------------
+// Bot ready
+// ----------------------------------------
 
 client.once("ready", async () => {
   console.log(`TvBot logged in as ${client.user.tag}`);
@@ -107,12 +125,17 @@ client.once("ready", async () => {
   console.log(`API URL: ${apiUrl}`);
 });
 
+// ----------------------------------------
+// Commands
+// ----------------------------------------
+
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  // =========================
+  // ======================================
   // /status
-  // =========================
+  // ======================================
+
   if (interaction.commandName === "status") {
     await interaction.deferReply({ ephemeral: true });
 
@@ -139,9 +162,10 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  // =========================
+  // ======================================
   // /verify
-  // =========================
+  // ======================================
+
   if (interaction.commandName === "verify") {
     const requestCode = interaction.options
       .getString("otp", true)
@@ -149,49 +173,62 @@ client.on("interactionCreate", async (interaction) => {
 
     await interaction.deferReply({ ephemeral: true });
 
-    // TvPatcher uses a long request code.
-    // Accept letters, numbers, dashes and underscores.
+    // TvPatcher generates a long hexadecimal
+    // request code.
     if (
       requestCode.length < 8 ||
       requestCode.length > 256 ||
-      !/^[A-Za-z0-9_-]+$/.test(requestCode)
+      !/^[A-Fa-f0-9]+$/.test(requestCode)
     ) {
       await interaction.editReply(
-        "❌ Invalid request code format. Paste the full request code from TvPatcher."
+        "❌ Invalid request code format.\n\nPaste the entire long request code from TvPatcher."
       );
       return;
     }
 
     try {
-      const result = await apiRequest("/api/otp/verify", {
+      const result = await apiRequest("/api/otp/issue", {
         method: "POST",
         body: JSON.stringify({
-          otp: requestCode,
-          requestCode: requestCode,
+          requestCode,
           discordUserId: interaction.user.id,
           discordUsername: interaction.user.username,
-          guildId: interaction.guildId,
         }),
       });
 
       console.log(
-        `Request-code verification for ${interaction.user.tag}: HTTP ${result.status}`
+        `Verification for ${interaction.user.tag}: HTTP ${result.status}`
       );
 
-      if (result.ok && result.data?.success !== false) {
-        await interaction.editReply(
-          "✅ Request code verified successfully. TvPatcher access has been verified."
-        );
-      } else {
-        const message =
-          result.data?.message ||
-          result.data?.error ||
-          "The request code could not be verified.";
+      // ------------------------------------
+      // Successful request
+      // ------------------------------------
 
-        await interaction.editReply(`❌ ${message}`);
+      if (result.ok && result.data?.otp) {
+        const otp = String(result.data.otp);
+
+        await interaction.editReply(
+          `✅ Request approved!\n\n` +
+          `🔐 **Your OTP code is:** \`${otp}\`\n\n` +
+          `Enter this 6-digit code in TvPatcher.\n\n` +
+          `⏱️ The code expires in 5 minutes.`
+        );
+
+        return;
       }
+
+      // ------------------------------------
+      // API returned an error
+      // ------------------------------------
+
+      const message =
+        result.data?.message ||
+        result.data?.error ||
+        "The request code could not be verified.";
+
+      await interaction.editReply(`❌ ${message}`);
     } catch (error) {
-      console.error("Request-code verification failed:", error);
+      console.error("OTP verification failed:", error);
 
       await interaction.editReply(
         "❌ Could not connect to the TvBot API."
@@ -199,6 +236,10 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 });
+
+// ----------------------------------------
+// Discord errors
+// ----------------------------------------
 
 client.on("error", (error) => {
   console.error("Discord client error:", error);
@@ -211,5 +252,9 @@ process.on("unhandledRejection", (error) => {
 process.on("uncaughtException", (error) => {
   console.error("Uncaught exception:", error);
 });
+
+// ----------------------------------------
+// Login
+// ----------------------------------------
 
 client.login(token);
