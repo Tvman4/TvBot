@@ -31,15 +31,14 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-// Slash commands
 const commands = [
   new SlashCommandBuilder()
     .setName("verify")
-    .setDescription("Verify a TvPatcher OTP")
+    .setDescription("Verify a TvPatcher request code")
     .addStringOption((option) =>
       option
         .setName("otp")
-        .setDescription("The OTP shown in TvPatcher")
+        .setDescription("The full request code shown in TvPatcher")
         .setRequired(true)
     ),
 
@@ -81,9 +80,11 @@ async function apiRequest(path, options = {}) {
   try {
     data = await response.json();
   } catch {
+    const text = await response.text();
+
     data = {
       success: response.ok,
-      message: await response.text(),
+      message: text,
     };
   }
 
@@ -109,7 +110,9 @@ client.once("ready", async () => {
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
+  // =========================
   // /status
+  // =========================
   if (interaction.commandName === "status") {
     await interaction.deferReply({ ephemeral: true });
 
@@ -136,15 +139,25 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
+  // =========================
   // /verify
+  // =========================
   if (interaction.commandName === "verify") {
-    const otp = interaction.options.getString("otp", true).trim();
+    const requestCode = interaction.options
+      .getString("otp", true)
+      .trim();
 
     await interaction.deferReply({ ephemeral: true });
 
-    if (!/^[0-9]{4,12}$/.test(otp)) {
+    // TvPatcher uses a long request code.
+    // Accept letters, numbers, dashes and underscores.
+    if (
+      requestCode.length < 8 ||
+      requestCode.length > 256 ||
+      !/^[A-Za-z0-9_-]+$/.test(requestCode)
+    ) {
       await interaction.editReply(
-        "❌ Invalid OTP format."
+        "❌ Invalid request code format. Paste the full request code from TvPatcher."
       );
       return;
     }
@@ -153,7 +166,8 @@ client.on("interactionCreate", async (interaction) => {
       const result = await apiRequest("/api/otp/verify", {
         method: "POST",
         body: JSON.stringify({
-          otp,
+          otp: requestCode,
+          requestCode: requestCode,
           discordUserId: interaction.user.id,
           discordUsername: interaction.user.username,
           guildId: interaction.guildId,
@@ -161,23 +175,23 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       console.log(
-        `OTP verification for ${interaction.user.tag}: HTTP ${result.status}`
+        `Request-code verification for ${interaction.user.tag}: HTTP ${result.status}`
       );
 
       if (result.ok && result.data?.success !== false) {
         await interaction.editReply(
-          "✅ OTP verified successfully. TvPatcher access has been verified."
+          "✅ Request code verified successfully. TvPatcher access has been verified."
         );
       } else {
         const message =
           result.data?.message ||
           result.data?.error ||
-          "The OTP could not be verified.";
+          "The request code could not be verified.";
 
         await interaction.editReply(`❌ ${message}`);
       }
     } catch (error) {
-      console.error("OTP verification failed:", error);
+      console.error("Request-code verification failed:", error);
 
       await interaction.editReply(
         "❌ Could not connect to the TvBot API."
