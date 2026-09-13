@@ -1,36 +1,19 @@
-# TvPatcher Verification Bot
+# TvBot OTP Server + Discord Bot
 
-Companion Discord bot + HTTPS API for the TvPatcher OTP screen.
+This runs the HTTPS OTP API and Discord verification bot in one Render service.
 
-## Important security behavior
+## Render environment variables
+- `DISCORD_TOKEN`
+- `CLIENT_ID`
+- `GUILD_ID`
+- `OTP_API_URL=https://tvbot-pvr5.onrender.com`
+- `OTP_API_SECRET` — same secret used by the API and bot
+- `ALLOWED_ROLE_IDS=1538971045325963396,1545213919625478184`
+- `PORT` — Render supplies this automatically; do not hard-code it in production.
 
-- The Discord bot token is read only from `DISCORD_TOKEN` and is never embedded in the APK.
-- TvPatcher opens Meta's official login page in the device's external browser. The app does not request, read, proxy, or store a Meta password or OAuth token.
-- `/verify` verifies the Discord-side challenge and headset claim. It does **not** prove physical headset ownership by itself; add a trusted headset verification provider if you need that stronger check.
+## API
+- `POST /api/otp/request` with `{ "headset": "..." }` -> returns `requestCode`.
+- Discord `/verify code:<requestCode> headset:<headset>` calls `/api/otp/issue`.
+- `POST /api/otp/check` with `{ "otp": "...", "headset": "..." }` consumes the OTP once.
 
-## Environment variables
-
-Set these as deployment secrets/environment variables:
-
-- `DISCORD_TOKEN` — Discord bot token
-- `DISCORD_CLIENT_ID` — Discord application ID
-- `DISCORD_GUILD_ID` — optional guild ID for fast command registration during testing
-- `PORT` — supplied automatically by Render; do not hard-code it in Render unless you have a specific reason
-
-## Flow
-
-1. TvPatcher POSTs `/api/request` with a random challenge.
-2. User runs `/verify challenge:<challenge> headset:<headset>` in Discord.
-3. The bot creates a six-digit OTP.
-4. TvPatcher polls `/api/status` and displays the OTP when verified.
-5. The OTP unlocks the PATCHING tab in the APK.
-
-## Deploying
-
-Deploy this directory as a Node/Docker web service. Copy the service's HTTPS URL into `API_BASE_URL` in the Android app before building.
-
-For GitHub Actions, store `DISCORD_TOKEN` in repository **Settings → Secrets and variables → Actions**. Never commit the token to source control.
-
-## Render troubleshooting
-
-The Dockerfile uses `npm install` rather than `npm ci`, so the service does not require a committed `package-lock.json`. The API binds to `0.0.0.0` and uses Render's `PORT` environment variable.
+The server stores only short-lived request/OTP records in memory. A restart clears them.
